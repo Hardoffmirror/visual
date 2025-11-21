@@ -396,8 +396,9 @@ public partial class MainViewModel : ObservableObject
                     {
                         DatTableView = datFile.DataTable.DefaultView;
                     }
-                    FileContent = $"DAT File: {datFile.RowCount} rows, {datFile.RowWidth} bytes per row";
-                    StatusMessage = $"Loaded {SelectedFile.Name} - {datFile.RowCount} rows";
+                    string schemaStatus = datFile.HasSchema ? "with schema" : "no schema";
+                    FileContent = $"DAT File: {datFile.RowCount} rows, {datFile.RowWidth} bytes per row ({schemaStatus})";
+                    StatusMessage = $"Loaded {SelectedFile.Name} - {datFile.RowCount} rows ({schemaStatus})";
                 });
                 return;
             }
