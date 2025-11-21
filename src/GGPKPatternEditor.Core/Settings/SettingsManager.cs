@@ -34,15 +34,6 @@ public class SettingsManager
             throw new InvalidDataException("Failed to parse configuration file");
         }
 
-        // Parse binary patterns from hex strings
-        foreach (var rule in config.Rules)
-        {
-            if (!string.IsNullOrEmpty(rule.Search.HexPattern))
-            {
-                rule.Search.BinaryPattern = PatternMatcher.ParseHexPattern(rule.Search.HexPattern);
-            }
-        }
-
         return config;
     }
 
