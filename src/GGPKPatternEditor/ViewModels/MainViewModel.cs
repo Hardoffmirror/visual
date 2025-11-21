@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using GGPKPatternEditor.Core.GGPK;
 using GGPKPatternEditor.Core.Pattern;
 using GGPKPatternEditor.Core.Settings;
+using GGPKPatternEditor.Models;
 using Microsoft.Win32;
 
 namespace GGPKPatternEditor.ViewModels;
@@ -49,6 +50,7 @@ public partial class MainViewModel : ObservableObject
     private string _searchFilter = string.Empty;
 
     public ObservableCollection<GGPKRecord> FilteredFiles { get; } = new();
+    public ObservableCollection<TreeNode> FileTree { get; } = new();
     public ObservableCollection<SearchResult> SearchResults { get; } = new();
 
     public bool IsFileLoaded => _ggpkFile.IsLoaded;
@@ -75,6 +77,22 @@ public partial class MainViewModel : ObservableObject
             if (success)
             {
                 GgpkFilePath = dialog.FileName;
+                StatusMessage = $"Building file tree...";
+
+                // Build tree structure in background
+                await Task.Run(() =>
+                {
+                    var tree = TreeNode.BuildTree(_ggpkFile.GetAllFiles());
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        FileTree.Clear();
+                        foreach (var node in tree)
+                        {
+                            FileTree.Add(node);
+                        }
+                    });
+                });
+
                 StatusMessage = $"Loaded {_ggpkFile.AllRecords.Count} records from {Path.GetFileName(dialog.FileName)}";
                 RefreshFileList();
                 OnPropertyChanged(nameof(IsFileLoaded));
@@ -322,27 +340,83 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ViewFileContent()
+    private async Task ViewFileContent()
     {
         if (SelectedFile == null || !_ggpkFile.IsLoaded) return;
 
-        byte[]? content = _ggpkFile.ReadFileContent(SelectedFile);
-        if (content == null)
+        FileContent = "Loading...";
+        StatusMessage = $"Loading {SelectedFile.Name}...";
+
+        await Task.Run(() =>
         {
-            FileContent = "Unable to read file content";
-            return;
+            byte[]? content = _ggpkFile.ReadFileContent(SelectedFile);
+            if (content == null)
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    FileContent = "Unable to read file content";
+                    StatusMessage = "Failed to read file";
+                });
+                return;
+            }
+
+            string result;
+            int maxSize = 100 * 1024; // 100KB limit for display
+
+            // Check if file is binary
+            bool isBinary = IsBinaryFile(content, SelectedFile.Name);
+
+            if (isBinary)
+            {
+                // Show hex dump for binary files (limited)
+                int displaySize = Math.Min(content.Length, maxSize);
+                result = FormatHexDump(content.Take(displaySize).ToArray());
+                if (content.Length > maxSize)
+                {
+                    result += $"\n\n... Showing first {maxSize / 1024}KB of {content.Length / 1024}KB. Use Export to save full file.";
+                }
+            }
+            else
+            {
+                // Text file
+                if (content.Length > maxSize)
+                {
+                    result = Encoding.UTF8.GetString(content, 0, maxSize);
+                    result += $"\n\n... Truncated. Showing first {maxSize / 1024}KB of {content.Length / 1024}KB.";
+                }
+                else
+                {
+                    result = Encoding.UTF8.GetString(content);
+                }
+            }
+
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                FileContent = result;
+                StatusMessage = $"Loaded {SelectedFile.Name} ({content.Length / 1024}KB)";
+            });
+        });
+    }
+
+    private bool IsBinaryFile(byte[] content, string fileName)
+    {
+        // Check by extension first
+        string ext = Path.GetExtension(fileName).ToLowerInvariant();
+        string[] binaryExtensions = { ".dat", ".dat64", ".datl", ".datl64", ".dds", ".png", ".jpg", ".ogg", ".bank", ".bin", ".bundle" };
+        if (binaryExtensions.Contains(ext))
+            return true;
+
+        // Check content for null bytes (common in binary)
+        int checkLength = Math.Min(content.Length, 8192);
+        int nullCount = 0;
+        for (int i = 0; i < checkLength; i++)
+        {
+            if (content[i] == 0)
+                nullCount++;
         }
 
-        // Try to display as text
-        try
-        {
-            FileContent = Encoding.UTF8.GetString(content);
-        }
-        catch
-        {
-            // Show as hex dump
-            FileContent = FormatHexDump(content);
-        }
+        // If more than 10% null bytes, likely binary
+        return nullCount > checkLength * 0.1;
     }
 
     [RelayCommand]
