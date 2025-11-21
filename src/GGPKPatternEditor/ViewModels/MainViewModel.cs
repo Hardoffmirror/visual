@@ -442,15 +442,58 @@ public partial class MainViewModel : ObservableObject
                 return;
             }
 
-            // Check for DDS files (show info, can't display directly)
-            if (ext == ".dds")
+            // Check for DDS files - use Pfim to decode
+            if (ext == ".dds" || ext == ".tga")
             {
                 Application.Current.Dispatcher.Invoke(() =>
                 {
-                    FileContent = $"DDS Texture file ({content.Length / 1024}KB)\n\n" +
-                                 "DDS format requires conversion for display.\n" +
-                                 "Use Export to save the file and view with external tool.";
-                    StatusMessage = $"Loaded {SelectedFile.Name} (DDS texture)";
+                    try
+                    {
+                        using var ms = new MemoryStream(content);
+                        using var image = Pfim.Pfimage.FromStream(ms);
+
+                        // Convert to WPF BitmapSource
+                        var format = GetPixelFormat(image.Format);
+                        if (format == System.Windows.Media.PixelFormats.Default)
+                        {
+                            FileContent = $"Unsupported DDS format: {image.Format}";
+                            StatusMessage = "DDS format not supported";
+                            return;
+                        }
+
+                        var bitmap = System.Windows.Media.Imaging.BitmapSource.Create(
+                            image.Width, image.Height,
+                            96, 96,
+                            format,
+                            null,
+                            image.Data,
+                            image.Stride);
+
+                        // Convert to BitmapImage for binding
+                        var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+
+                        using var pngStream = new MemoryStream();
+                        encoder.Save(pngStream);
+                        pngStream.Position = 0;
+
+                        var bitmapImage = new System.Windows.Media.Imaging.BitmapImage();
+                        bitmapImage.BeginInit();
+                        bitmapImage.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                        bitmapImage.StreamSource = pngStream;
+                        bitmapImage.EndInit();
+                        bitmapImage.Freeze();
+
+                        IsImageFile = true;
+                        ImageSource = bitmapImage;
+                        FileContent = $"DDS Texture: {image.Width}x{image.Height} ({image.Format})";
+                        StatusMessage = $"Loaded {SelectedFile.Name} - {image.Width}x{image.Height}";
+                    }
+                    catch (Exception ex)
+                    {
+                        FileContent = $"Failed to load DDS: {ex.Message}\n\nUse Export to save and view with external tool.";
+                        StatusMessage = "DDS load failed";
+                    }
                 });
                 return;
             }
@@ -572,6 +615,21 @@ public partial class MainViewModel : ObservableObject
                 MessageBox.Show($"Failed to export: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+    }
+
+    private static System.Windows.Media.PixelFormat GetPixelFormat(Pfim.ImageFormat format)
+    {
+        return format switch
+        {
+            Pfim.ImageFormat.Rgba32 => System.Windows.Media.PixelFormats.Bgra32,
+            Pfim.ImageFormat.Rgb24 => System.Windows.Media.PixelFormats.Bgr24,
+            Pfim.ImageFormat.Rgba16 => System.Windows.Media.PixelFormats.Bgr555,
+            Pfim.ImageFormat.R5g5b5 => System.Windows.Media.PixelFormats.Bgr555,
+            Pfim.ImageFormat.R5g6b5 => System.Windows.Media.PixelFormats.Bgr565,
+            Pfim.ImageFormat.R5g5b5a1 => System.Windows.Media.PixelFormats.Bgr555,
+            Pfim.ImageFormat.Rgb8 => System.Windows.Media.PixelFormats.Gray8,
+            _ => System.Windows.Media.PixelFormats.Default
+        };
     }
 
     private bool IsBinaryFile(byte[] content, string fileName)
