@@ -637,49 +637,68 @@ public partial class MainViewModel : ObservableObject
         // Check by extension first
         string ext = Path.GetExtension(fileName).ToLowerInvariant();
 
-        // Known text file extensions (POE specific + common)
-        string[] textExtensions = {
-            ".otc", ".hlsl", ".glsl", ".fx", ".shader", // Shaders
-            ".txt", ".json", ".xml", ".html", ".htm", ".css", ".js", // Web/text
-            ".lua", ".py", ".cs", ".cpp", ".c", ".h", ".hpp", // Code
-            ".ini", ".cfg", ".config", ".yaml", ".yml", ".toml", // Config
-            ".md", ".csv", ".tsv", ".log", // Data text
-            ".ot", ".otx", ".oc", ".occ", ".oct", ".filter", // POE specific
-            ".atlas", ".ais", ".aoc", ".arm", ".ast", ".at", ".bt", ".clt",
-            ".dct", ".dgr", ".dlp", ".ecf", ".edp", ".env", ".epk", ".et",
-            ".ffx", ".fmt", ".frag", ".gft", ".gt", ".idl", ".it", ".mat",
-            ".mtp", ".mtx", ".ot", ".otc", ".pet", ".psg", ".red", ".rs",
-            ".rtx", ".sm", ".tgr", ".tgt", ".tmd", ".trl", ".tsi", ".ttf",
-            ".ui", ".vert"
-        };
-
-        if (textExtensions.Contains(ext))
-            return false;
-
-        // Known binary file extensions
+        // Known binary file extensions - check these FIRST
         string[] binaryExtensions = {
             ".dat", ".dat64", ".datl", ".datl64", // POE data
             ".dds", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tga", // Images
             ".ogg", ".mp3", ".wav", ".bank", ".fsb", // Audio
             ".bin", ".bundle", ".bk2", ".usm", // Binary/video
-            ".ttf", ".otf", ".woff", // Fonts
-            ".zip", ".7z", ".rar" // Archives
+            ".ttf", ".otf", ".woff", ".woff2", // Fonts
+            ".zip", ".7z", ".rar", ".gz", // Archives
+            ".dll", ".exe", ".so", // Executables
+            ".psg", ".sm", ".ao", ".amd", ".epk", ".smd" // POE binary
         };
 
         if (binaryExtensions.Contains(ext))
             return true;
 
-        // Check content for null bytes (common in binary)
-        int checkLength = Math.Min(content.Length, 8192);
-        int nullCount = 0;
+        // Known text file extensions (POE specific + common)
+        string[] textExtensions = {
+            // Shaders
+            ".otc", ".hlsl", ".glsl", ".fx", ".shader", ".vert", ".frag", ".geom", ".comp",
+            // Web/text
+            ".txt", ".json", ".xml", ".html", ".htm", ".css", ".js", ".ts",
+            // Code
+            ".lua", ".py", ".cs", ".cpp", ".c", ".h", ".hpp", ".java", ".rb", ".php",
+            // Config
+            ".ini", ".cfg", ".config", ".yaml", ".yml", ".toml", ".properties",
+            // Data text
+            ".md", ".csv", ".tsv", ".log", ".sql",
+            // POE specific text formats
+            ".ot", ".filter", ".atlas", ".ais", ".aoc", ".arm", ".ast", ".at", ".bt",
+            ".clt", ".dct", ".dgr", ".dlp", ".ecf", ".edp", ".env", ".et", ".ffx",
+            ".fmt", ".gft", ".gt", ".idl", ".it", ".mat", ".mtd", ".mtp", ".mtx",
+            ".pet", ".red", ".rs", ".rtx", ".tgr", ".tgt", ".tmd", ".trl", ".tsi",
+            ".ui", ".act", ".ais", ".amd", ".ao", ".aoc", ".arm", ".ast", ".atlas",
+            ".bank", ".bt", ".cht", ".clt", ".dct", ".dgr", ".dlp", ".ecf", ".edp",
+            ".env", ".epk", ".et", ".ffx", ".fmt", ".gft", ".gt", ".idl", ".it",
+            ".mat", ".mtp", ".mtx", ".ot", ".otc", ".pet", ".red", ".rs", ".rtx",
+            ".sm", ".tgr", ".tgt", ".tmd", ".trl", ".tsi", ".ui"
+        };
+
+        if (textExtensions.Contains(ext))
+            return false;
+
+        // For unknown extensions, try to detect if it's valid text
+        // Check first 4KB for content analysis
+        int checkLength = Math.Min(content.Length, 4096);
+
+        if (checkLength == 0)
+            return false;
+
+        // Count problematic bytes (null bytes and control characters except common ones)
+        int problemBytes = 0;
         for (int i = 0; i < checkLength; i++)
         {
-            if (content[i] == 0)
-                nullCount++;
+            byte b = content[i];
+            // Null byte or non-printable control chars (except tab, newline, carriage return)
+            if (b == 0 || (b < 32 && b != 9 && b != 10 && b != 13))
+                problemBytes++;
         }
 
-        // If more than 10% null bytes, likely binary
-        return nullCount > checkLength * 0.1;
+        // If more than 30% problematic bytes, it's likely binary
+        // This is more lenient to handle various text encodings
+        return problemBytes > checkLength * 0.3;
     }
 
     [RelayCommand]
