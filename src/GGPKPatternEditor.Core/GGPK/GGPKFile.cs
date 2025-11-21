@@ -1,5 +1,5 @@
 using LibGGPK3.Records;
-using LibBundledGGPK;
+using LibBundledGGPK3;
 using LibBundle3.Nodes;
 
 namespace GGPKPatternEditor.Core.GGPK;
