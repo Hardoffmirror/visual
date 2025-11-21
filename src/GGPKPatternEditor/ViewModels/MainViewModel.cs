@@ -402,7 +402,36 @@ public partial class MainViewModel : ObservableObject
     {
         // Check by extension first
         string ext = Path.GetExtension(fileName).ToLowerInvariant();
-        string[] binaryExtensions = { ".dat", ".dat64", ".datl", ".datl64", ".dds", ".png", ".jpg", ".ogg", ".bank", ".bin", ".bundle" };
+
+        // Known text file extensions (POE specific + common)
+        string[] textExtensions = {
+            ".otc", ".hlsl", ".glsl", ".fx", ".shader", // Shaders
+            ".txt", ".json", ".xml", ".html", ".htm", ".css", ".js", // Web/text
+            ".lua", ".py", ".cs", ".cpp", ".c", ".h", ".hpp", // Code
+            ".ini", ".cfg", ".config", ".yaml", ".yml", ".toml", // Config
+            ".md", ".csv", ".tsv", ".log", // Data text
+            ".ot", ".otx", ".oc", ".occ", ".oct", ".filter", // POE specific
+            ".atlas", ".ais", ".aoc", ".arm", ".ast", ".at", ".bt", ".clt",
+            ".dct", ".dgr", ".dlp", ".ecf", ".edp", ".env", ".epk", ".et",
+            ".ffx", ".fmt", ".frag", ".gft", ".gt", ".idl", ".it", ".mat",
+            ".mtp", ".mtx", ".ot", ".otc", ".pet", ".psg", ".red", ".rs",
+            ".rtx", ".sm", ".tgr", ".tgt", ".tmd", ".trl", ".tsi", ".ttf",
+            ".ui", ".vert"
+        };
+
+        if (textExtensions.Contains(ext))
+            return false;
+
+        // Known binary file extensions
+        string[] binaryExtensions = {
+            ".dat", ".dat64", ".datl", ".datl64", // POE data
+            ".dds", ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tga", // Images
+            ".ogg", ".mp3", ".wav", ".bank", ".fsb", // Audio
+            ".bin", ".bundle", ".bk2", ".usm", // Binary/video
+            ".ttf", ".otf", ".woff", // Fonts
+            ".zip", ".7z", ".rar" // Archives
+        };
+
         if (binaryExtensions.Contains(ext))
             return true;
 
