@@ -391,8 +391,11 @@ public partial class MainViewModel : ObservableObject
             _currentFileContent = content;
             string ext = Path.GetExtension(SelectedFile.Name).ToLowerInvariant();
 
+            // Detect actual file type by magic bytes first
+            string detectedType = DetectFileType(content, ext);
+
             // Check if it's a DAT file - show as table
-            if (ext == ".dat" || ext == ".dat64" || ext == ".datl" || ext == ".datl64")
+            if (detectedType == "dat" || ext == ".dat" || ext == ".dat64" || ext == ".datl" || ext == ".datl64")
             {
                 var datFile = DatFile.Parse(content, SelectedFile.Name);
                 _currentDatFile = datFile;
@@ -411,9 +414,8 @@ public partial class MainViewModel : ObservableObject
                 return;
             }
 
-            // Check if it's an image file
-            string[] imageExtensions = { ".png", ".jpg", ".jpeg", ".bmp", ".gif" };
-            if (imageExtensions.Contains(ext))
+            // Check if it's an image file (PNG, JPG, BMP, GIF)
+            if (detectedType == "png" || detectedType == "jpg" || detectedType == "bmp" || detectedType == "gif")
             {
                 Application.Current.Dispatcher.Invoke(() =>
                 {
@@ -442,8 +444,8 @@ public partial class MainViewModel : ObservableObject
                 return;
             }
 
-            // Check for DDS files - use Pfim to decode
-            if (ext == ".dds" || ext == ".tga")
+            // Check for DDS/TGA files - use Pfim to decode
+            if (detectedType == "dds" || detectedType == "tga" || ext == ".dds" || ext == ".tga")
             {
                 Application.Current.Dispatcher.Invoke(() =>
                 {
@@ -501,8 +503,8 @@ public partial class MainViewModel : ObservableObject
             string result;
             int maxSize = 100 * 1024; // 100KB limit for display
 
-            // Check if file is binary
-            bool isBinary = IsBinaryFile(content, SelectedFile.Name);
+            // Check if file is binary (using detected type first)
+            bool isBinary = detectedType != "text" && IsBinaryFile(content, SelectedFile.Name);
 
             if (isBinary)
             {
@@ -699,6 +701,74 @@ public partial class MainViewModel : ObservableObject
         // If more than 30% problematic bytes, it's likely binary
         // This is more lenient to handle various text encodings
         return problemBytes > checkLength * 0.3;
+    }
+
+    private string DetectFileType(byte[] content, string extension)
+    {
+        // Check magic bytes (file signatures) first
+        if (content.Length >= 8)
+        {
+            // PNG: 89 50 4E 47 0D 0A 1A 0A
+            if (content[0] == 0x89 && content[1] == 0x50 && content[2] == 0x4E && content[3] == 0x47 &&
+                content[4] == 0x0D && content[5] == 0x0A && content[6] == 0x1A && content[7] == 0x0A)
+                return "png";
+
+            // DDS: 44 44 53 20 (DDS )
+            if (content[0] == 0x44 && content[1] == 0x44 && content[2] == 0x53 && content[3] == 0x20)
+                return "dds";
+
+            // OGG: 4F 67 67 53 (OggS)
+            if (content[0] == 0x4F && content[1] == 0x67 && content[2] == 0x67 && content[3] == 0x53)
+                return "ogg";
+        }
+
+        if (content.Length >= 4)
+        {
+            // RIFF (WAV, etc): 52 49 46 46
+            if (content[0] == 0x52 && content[1] == 0x49 && content[2] == 0x46 && content[3] == 0x46)
+                return "wav";
+
+            // GIF: 47 49 46 38 (GIF8)
+            if (content[0] == 0x47 && content[1] == 0x49 && content[2] == 0x46 && content[3] == 0x38)
+                return "gif";
+        }
+
+        if (content.Length >= 3)
+        {
+            // JPEG: FF D8 FF
+            if (content[0] == 0xFF && content[1] == 0xD8 && content[2] == 0xFF)
+                return "jpg";
+
+            // ID3 (MP3): 49 44 33
+            if (content[0] == 0x49 && content[1] == 0x44 && content[2] == 0x33)
+                return "mp3";
+        }
+
+        if (content.Length >= 2)
+        {
+            // BMP: 42 4D (BM)
+            if (content[0] == 0x42 && content[1] == 0x4D)
+                return "bmp";
+
+            // PK (ZIP): 50 4B
+            if (content[0] == 0x50 && content[1] == 0x4B)
+                return "zip";
+        }
+
+        // TGA doesn't have a reliable magic number, check extension
+        if (extension == ".tga")
+            return "tga";
+
+        // DAT files - check if it starts with a reasonable row count and has magic marker
+        if (extension == ".dat" || extension == ".dat64" || extension == ".datl" || extension == ".datl64")
+            return "dat";
+
+        // Check if content looks like text
+        if (content.Length > 0 && !IsBinaryFile(content, "unknown" + extension))
+            return "text";
+
+        // Return extension-based type or unknown
+        return extension.TrimStart('.').ToLowerInvariant();
     }
 
     [RelayCommand]
