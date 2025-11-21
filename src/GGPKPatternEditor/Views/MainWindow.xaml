@@ -206,6 +206,17 @@
                                   EnableRowVirtualization="True"
                                   EnableColumnVirtualization="True"/>
 
+                        <!-- Image View -->
+                        <ScrollViewer Grid.Row="1"
+                                      HorizontalScrollBarVisibility="Auto"
+                                      VerticalScrollBarVisibility="Auto"
+                                      Visibility="{Binding IsImageFile, Converter={StaticResource BoolToVisibilityConverter}}">
+                            <Image Source="{Binding ImageSource}"
+                                   Stretch="None"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"/>
+                        </ScrollViewer>
+
                         <!-- Text View (read-only) -->
                         <TextBox Grid.Row="1"
                                  Text="{Binding FileContent, Mode=OneWay}"
@@ -224,6 +235,9 @@
                                             <Setter Property="Visibility" Value="Collapsed"/>
                                         </DataTrigger>
                                         <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsImageFile}" Value="True">
                                             <Setter Property="Visibility" Value="Collapsed"/>
                                         </DataTrigger>
                                     </Style.Triggers>

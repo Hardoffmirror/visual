@@ -63,6 +63,12 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string _editableContent = string.Empty;
 
+    [ObservableProperty]
+    private bool _isImageFile;
+
+    [ObservableProperty]
+    private System.Windows.Media.Imaging.BitmapImage? _imageSource;
+
     private DatFile? _currentDatFile;
     private byte[]? _currentFileContent;
 
@@ -365,7 +371,9 @@ public partial class MainViewModel : ObservableObject
         StatusMessage = $"Loading {SelectedFile.Name}...";
         IsEditing = false;
         IsDatFile = false;
+        IsImageFile = false;
         DatTableView = null;
+        ImageSource = null;
 
         await Task.Run(() =>
         {
@@ -399,6 +407,50 @@ public partial class MainViewModel : ObservableObject
                     string schemaStatus = datFile.HasSchema ? "with schema" : "no schema";
                     FileContent = $"DAT File: {datFile.RowCount} rows, {datFile.RowWidth} bytes per row ({schemaStatus})";
                     StatusMessage = $"Loaded {SelectedFile.Name} - {datFile.RowCount} rows ({schemaStatus})";
+                });
+                return;
+            }
+
+            // Check if it's an image file
+            string[] imageExtensions = { ".png", ".jpg", ".jpeg", ".bmp", ".gif" };
+            if (imageExtensions.Contains(ext))
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    try
+                    {
+                        var bitmap = new System.Windows.Media.Imaging.BitmapImage();
+                        using (var ms = new MemoryStream(content))
+                        {
+                            bitmap.BeginInit();
+                            bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                            bitmap.StreamSource = ms;
+                            bitmap.EndInit();
+                            bitmap.Freeze();
+                        }
+                        IsImageFile = true;
+                        ImageSource = bitmap;
+                        FileContent = $"Image: {bitmap.PixelWidth}x{bitmap.PixelHeight} pixels";
+                        StatusMessage = $"Loaded {SelectedFile.Name} - {bitmap.PixelWidth}x{bitmap.PixelHeight}";
+                    }
+                    catch (Exception ex)
+                    {
+                        FileContent = $"Failed to load image: {ex.Message}";
+                        StatusMessage = "Image load failed";
+                    }
+                });
+                return;
+            }
+
+            // Check for DDS files (show info, can't display directly)
+            if (ext == ".dds")
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    FileContent = $"DDS Texture file ({content.Length / 1024}KB)\n\n" +
+                                 "DDS format requires conversion for display.\n" +
+                                 "Use Export to save the file and view with external tool.";
+                    StatusMessage = $"Loaded {SelectedFile.Name} (DDS texture)";
                 });
                 return;
             }
