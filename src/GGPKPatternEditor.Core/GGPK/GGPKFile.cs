@@ -84,7 +84,7 @@ public class GGPKFile : IDisposable
         if (node is IDirectoryNode dirNode)
         {
             // Directory - iterate children
-            foreach (var child in dirNode)
+            foreach (var child in dirNode.Children)
             {
                 IndexBundledFiles(child, currentPath, progress);
             }
@@ -163,11 +163,11 @@ public class GGPKFile : IDisposable
 
         try
         {
-            if (_isBundled && record.BundledFileNode != null && _bundledGgpk != null)
+            if (_isBundled && record.BundledFileNode != null)
             {
                 // Read content from bundled file
                 var fileRecord = record.BundledFileNode.Record;
-                return _bundledGgpk.Index.GetFileContent(fileRecord);
+                return fileRecord.Read().ToArray();
             }
             else if (record.LegacyRecord != null)
             {
@@ -191,12 +191,11 @@ public class GGPKFile : IDisposable
 
         try
         {
-            if (_isBundled && record.BundledFileNode != null && _bundledGgpk != null)
+            if (_isBundled && record.BundledFileNode != null)
             {
-                // For bundled files, we need to replace through the index
-                var fileRecord = record.BundledFileNode.Record;
-                _bundledGgpk.Index.Replace(new[] { fileRecord }, new[] { content });
-                return true;
+                // Bundled files don't support direct writing yet
+                // Would need to extract, modify, and repack the bundle
+                return false;
             }
             else if (record.LegacyRecord != null)
             {
