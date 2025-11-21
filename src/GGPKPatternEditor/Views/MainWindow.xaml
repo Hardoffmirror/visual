@@ -101,7 +101,10 @@
                                  ItemsSource="{Binding FilteredFiles}"
                                  SelectedItem="{Binding SelectedFile}"
                                  DisplayMemberPath="FullPath"
-                                 SelectionChanged="FileListBox_SelectionChanged"/>
+                                 SelectionChanged="FileListBox_SelectionChanged"
+                                 VirtualizingStackPanel.IsVirtualizing="True"
+                                 VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                 ScrollViewer.IsDeferredScrollingEnabled="True"/>
                     </Grid>
                 </Border>
 

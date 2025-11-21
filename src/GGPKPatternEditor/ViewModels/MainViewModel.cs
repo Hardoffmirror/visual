@@ -369,32 +369,42 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnSearchFilterChanged(string value)
     {
-        RefreshFileList();
+        _ = RefreshFileListAsync();
     }
 
-    private void RefreshFileList()
+    private async Task RefreshFileListAsync()
     {
-        FilteredFiles.Clear();
-
         if (!_ggpkFile.IsLoaded) return;
 
-        var files = _ggpkFile.GetAllFiles();
-
-        if (!string.IsNullOrWhiteSpace(SearchFilter))
+        var filesList = await Task.Run(() =>
         {
-            string filter = SearchFilter.ToLowerInvariant();
-            files = files.Where(f => f.FullPath.ToLowerInvariant().Contains(filter));
-        }
+            var files = _ggpkFile.GetAllFiles();
 
-        foreach (var file in files.Take(1000)) // Limit for performance
+            if (!string.IsNullOrWhiteSpace(SearchFilter))
+            {
+                string filter = SearchFilter.ToLowerInvariant();
+                files = files.Where(f => f.FullPath.ToLowerInvariant().Contains(filter));
+            }
+
+            return files.Take(500).ToList(); // Reduced limit for better performance
+        });
+
+        FilteredFiles.Clear();
+        foreach (var file in filesList)
         {
             FilteredFiles.Add(file);
         }
 
-        if (_ggpkFile.GetAllFiles().Count() > 1000)
+        int totalCount = _ggpkFile.GetAllFiles().Count();
+        if (totalCount > 500)
         {
-            StatusMessage = $"Showing first 1000 of {_ggpkFile.GetAllFiles().Count()} files. Use filter to narrow down.";
+            StatusMessage = $"Showing first 500 of {totalCount} files. Use filter to narrow down.";
         }
+    }
+
+    private void RefreshFileList()
+    {
+        _ = RefreshFileListAsync();
     }
 
     private bool FileMatchesPatterns(string filePath, List<string> patterns)

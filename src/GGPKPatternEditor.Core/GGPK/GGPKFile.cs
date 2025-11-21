@@ -43,12 +43,16 @@ public class GGPKFile : IDisposable
         }
     }
 
+    private int _recordCount;
+    private DateTime _lastProgressReport = DateTime.MinValue;
+
     private void ParseRecords(IProgress<string>? progress)
     {
         if (_reader == null || _stream == null) return;
 
         _stream.Position = 0;
         long fileLength = _stream.Length;
+        _recordCount = 0;
 
         // First record should be GGPK
         var firstRecord = ReadRecord(0);
@@ -69,6 +73,7 @@ public class GGPKFile : IDisposable
         }
 
         // Build file index
+        progress?.Report("Building file index...");
         BuildFileIndex(Root, "");
     }
 
@@ -78,6 +83,15 @@ public class GGPKFile : IDisposable
 
         var record = ReadRecord(offset);
         if (record == null) return;
+
+        _recordCount++;
+
+        // Report progress every 100ms to avoid UI freezing
+        if ((DateTime.Now - _lastProgressReport).TotalMilliseconds > 100)
+        {
+            progress?.Report($"Parsing records... {_recordCount} found");
+            _lastProgressReport = DateTime.Now;
+        }
 
         AllRecords.Add(record);
 
