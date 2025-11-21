@@ -1,20 +1,22 @@
-using System.Text;
+using LibGGPK3;
+using LibGGPK3.Records;
+using LibBundledGGPK3;
 
 namespace GGPKPatternEditor.Core.GGPK;
 
 /// <summary>
-/// Represents a GGPK file container used by Path of Exile
+/// Represents a GGPK file container using LibGGPK3
 /// </summary>
 public class GGPKFile : IDisposable
 {
-    private FileStream? _stream;
-    private BinaryReader? _reader;
+    private GGPK? _ggpk;
+    private BundledGGPK? _bundledGgpk;
+    private bool _isBundled;
 
     public string FilePath { get; private set; } = string.Empty;
-    public GGPKRecord? Root { get; private set; }
     public List<GGPKRecord> AllRecords { get; } = new();
     public Dictionary<string, GGPKRecord> FileIndex { get; } = new();
-    public bool IsLoaded => _stream != null;
+    public bool IsLoaded => _ggpk != null || _bundledGgpk != null;
 
     /// <summary>
     /// Opens and parses a GGPK file
@@ -26,14 +28,40 @@ public class GGPKFile : IDisposable
             FilePath = filePath;
             progress?.Report($"Opening file: {filePath}");
 
-            _stream = new FileStream(filePath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
-            _reader = new BinaryReader(_stream);
+            await Task.Run(() =>
+            {
+                // Try to open as bundled GGPK first (modern POE)
+                try
+                {
+                    progress?.Report("Trying to load as bundled GGPK...");
+                    _bundledGgpk = new BundledGGPK(filePath, true);
+                    _isBundled = true;
 
-            // Read GGPK header
-            progress?.Report("Reading GGPK header...");
-            await Task.Run(() => ParseRecords(progress));
+                    progress?.Report("Parsing file paths...");
+                    _bundledGgpk.Index.ParsePaths();
 
-            progress?.Report($"Loaded {AllRecords.Count} records");
+                    progress?.Report("Building file tree...");
+                    var root = _bundledGgpk.Index.BuildTree(true);
+
+                    progress?.Report("Indexing files...");
+                    IndexBundledFiles(root, "", progress);
+                }
+                catch
+                {
+                    // Fall back to legacy GGPK
+                    _bundledGgpk?.Dispose();
+                    _bundledGgpk = null;
+
+                    progress?.Report("Loading as legacy GGPK...");
+                    _ggpk = new GGPK(filePath);
+                    _isBundled = false;
+
+                    progress?.Report("Indexing files...");
+                    IndexLegacyFiles(_ggpk.Root, "", progress);
+                }
+            });
+
+            progress?.Report($"Loaded {AllRecords.Count} files");
             return true;
         }
         catch (Exception ex)
@@ -46,159 +74,86 @@ public class GGPKFile : IDisposable
     private int _recordCount;
     private DateTime _lastProgressReport = DateTime.MinValue;
 
-    private void ParseRecords(IProgress<string>? progress)
+    private void IndexBundledFiles(LibBundle3.Index.TreeNode? node, string parentPath, IProgress<string>? progress)
     {
-        if (_reader == null || _stream == null) return;
+        if (node == null) return;
 
-        _stream.Position = 0;
-        long fileLength = _stream.Length;
-        _recordCount = 0;
+        string currentPath = string.IsNullOrEmpty(parentPath) && string.IsNullOrEmpty(node.Name)
+            ? ""
+            : string.IsNullOrEmpty(parentPath)
+                ? node.Name
+                : $"{parentPath}/{node.Name}";
 
-        // First record should be GGPK
-        var firstRecord = ReadRecord(0);
-        if (firstRecord?.Tag != "GGPK")
+        if (node.Children != null)
         {
-            throw new InvalidDataException("Invalid GGPK file - missing GGPK header");
-        }
-
-        AllRecords.Add(firstRecord);
-
-        // Parse all records referenced by GGPK header
-        if (firstRecord.ChildOffsets != null)
-        {
-            foreach (var offset in firstRecord.ChildOffsets)
+            // Directory
+            foreach (var child in node.Children)
             {
-                ParseRecordTree(offset, "", progress);
+                IndexBundledFiles(child, currentPath, progress);
             }
         }
-
-        // Build file index
-        progress?.Report("Building file index...");
-        BuildFileIndex(Root, "");
-    }
-
-    private void ParseRecordTree(long offset, string parentPath, IProgress<string>? progress)
-    {
-        if (_reader == null || _stream == null) return;
-
-        var record = ReadRecord(offset);
-        if (record == null) return;
-
-        _recordCount++;
-
-        // Report progress every 100ms to avoid UI freezing
-        if ((DateTime.Now - _lastProgressReport).TotalMilliseconds > 100)
+        else
         {
-            progress?.Report($"Parsing records... {_recordCount} found");
-            _lastProgressReport = DateTime.Now;
-        }
-
-        AllRecords.Add(record);
-
-        string currentPath = string.IsNullOrEmpty(parentPath)
-            ? record.Name
-            : $"{parentPath}/{record.Name}";
-        record.FullPath = currentPath;
-
-        if (record.Tag == "PDIR")
-        {
-            if (Root == null && string.IsNullOrEmpty(record.Name))
+            // File
+            var record = new GGPKRecord
             {
-                Root = record;
-            }
-
-            // Parse children
-            if (record.ChildOffsets != null)
-            {
-                foreach (var childOffset in record.ChildOffsets)
-                {
-                    ParseRecordTree(childOffset, currentPath, progress);
-                }
-            }
-        }
-    }
-
-    private GGPKRecord? ReadRecord(long offset)
-    {
-        if (_reader == null || _stream == null) return null;
-
-        _stream.Position = offset;
-
-        var record = new GGPKRecord
-        {
-            Offset = offset,
-            Length = _reader.ReadInt32()
-        };
-
-        byte[] tagBytes = _reader.ReadBytes(4);
-        record.Tag = Encoding.ASCII.GetString(tagBytes);
-
-        switch (record.Tag)
-        {
-            case "GGPK":
-                int version = _reader.ReadInt32();
-                int numOffsets = (record.Length - 12) / 8;
-                record.ChildOffsets = new long[numOffsets];
-                for (int i = 0; i < numOffsets; i++)
-                {
-                    record.ChildOffsets[i] = _reader.ReadInt64();
-                }
-                break;
-
-            case "PDIR":
-                int nameLength = _reader.ReadInt32();
-                int childCount = _reader.ReadInt32();
-                record.Hash = _reader.ReadBytes(32);
-
-                if (nameLength > 0)
-                {
-                    byte[] nameBytes = _reader.ReadBytes((nameLength - 1) * 2);
-                    record.Name = Encoding.Unicode.GetString(nameBytes);
-                    _reader.ReadBytes(2); // null terminator
-                }
-
-                record.ChildOffsets = new long[childCount];
-                for (int i = 0; i < childCount; i++)
-                {
-                    _reader.ReadInt32(); // name hash
-                    record.ChildOffsets[i] = _reader.ReadInt64();
-                }
-                break;
-
-            case "FILE":
-                int fileNameLength = _reader.ReadInt32();
-                record.Hash = _reader.ReadBytes(32);
-
-                if (fileNameLength > 0)
-                {
-                    byte[] nameBytes = _reader.ReadBytes((fileNameLength - 1) * 2);
-                    record.Name = Encoding.Unicode.GetString(nameBytes);
-                    _reader.ReadBytes(2); // null terminator
-                }
-
-                record.DataOffset = _stream.Position;
-                record.DataLength = record.Length - (int)(_stream.Position - offset);
-                break;
-
-            case "FREE":
-                // Free space record
-                break;
-        }
-
-        return record;
-    }
-
-    private void BuildFileIndex(GGPKRecord? record, string path)
-    {
-        if (record == null) return;
-
-        string currentPath = string.IsNullOrEmpty(path)
-            ? record.Name
-            : $"{path}/{record.Name}";
-
-        if (record.Tag == "FILE")
-        {
+                Name = node.Name,
+                FullPath = currentPath,
+                Tag = "FILE",
+                BundledNode = node
+            };
+            AllRecords.Add(record);
             FileIndex[currentPath.ToLowerInvariant()] = record;
+
+            _recordCount++;
+            if ((DateTime.Now - _lastProgressReport).TotalMilliseconds > 100)
+            {
+                progress?.Report($"Indexing... {_recordCount} files");
+                _lastProgressReport = DateTime.Now;
+            }
+        }
+    }
+
+    private void IndexLegacyFiles(DirectoryRecord? dir, string parentPath, IProgress<string>? progress)
+    {
+        if (dir == null) return;
+
+        string currentPath = string.IsNullOrEmpty(parentPath) && string.IsNullOrEmpty(dir.Name)
+            ? ""
+            : string.IsNullOrEmpty(parentPath)
+                ? dir.Name
+                : $"{parentPath}/{dir.Name}";
+
+        foreach (var child in dir)
+        {
+            if (child is DirectoryRecord subDir)
+            {
+                IndexLegacyFiles(subDir, currentPath, progress);
+            }
+            else if (child is FileRecord file)
+            {
+                string filePath = string.IsNullOrEmpty(currentPath)
+                    ? file.Name
+                    : $"{currentPath}/{file.Name}";
+
+                var record = new GGPKRecord
+                {
+                    Name = file.Name,
+                    FullPath = filePath,
+                    Tag = "FILE",
+                    LegacyRecord = file,
+                    DataLength = file.DataLength
+                };
+                AllRecords.Add(record);
+                FileIndex[filePath.ToLowerInvariant()] = record;
+
+                _recordCount++;
+                if ((DateTime.Now - _lastProgressReport).TotalMilliseconds > 100)
+                {
+                    progress?.Report($"Indexing... {_recordCount} files");
+                    _lastProgressReport = DateTime.Now;
+                }
+            }
         }
     }
 
@@ -207,27 +162,54 @@ public class GGPKFile : IDisposable
     /// </summary>
     public byte[]? ReadFileContent(GGPKRecord record)
     {
-        if (_stream == null || record.Tag != "FILE") return null;
+        if (record.Tag != "FILE") return null;
 
-        _stream.Position = record.DataOffset;
-        return new BinaryReader(_stream).ReadBytes(record.DataLength);
+        try
+        {
+            if (_isBundled && record.BundledNode != null && _bundledGgpk != null)
+            {
+                return _bundledGgpk.Index.GetFileContent(record.BundledNode);
+            }
+            else if (record.LegacyRecord != null)
+            {
+                return record.LegacyRecord.Read();
+            }
+        }
+        catch
+        {
+            return null;
+        }
+
+        return null;
     }
 
     /// <summary>
-    /// Writes content to a file record (same size only)
+    /// Writes content to a file record
     /// </summary>
     public bool WriteFileContent(GGPKRecord record, byte[] content)
     {
-        if (_stream == null || record.Tag != "FILE") return false;
-        if (content.Length != record.DataLength)
+        if (record.Tag != "FILE") return false;
+
+        try
         {
-            throw new ArgumentException($"Content size mismatch. Expected {record.DataLength}, got {content.Length}");
+            if (_isBundled && record.BundledNode != null && _bundledGgpk != null)
+            {
+                // For bundled files, we need to replace through the index
+                _bundledGgpk.Index.Replace(record.BundledNode, content);
+                return true;
+            }
+            else if (record.LegacyRecord != null)
+            {
+                record.LegacyRecord.Write(content);
+                return true;
+            }
+        }
+        catch
+        {
+            return false;
         }
 
-        _stream.Position = record.DataOffset;
-        _stream.Write(content, 0, content.Length);
-        _stream.Flush();
-        return true;
+        return false;
     }
 
     /// <summary>
@@ -250,10 +232,10 @@ public class GGPKFile : IDisposable
 
     public void Dispose()
     {
-        _reader?.Dispose();
-        _stream?.Dispose();
-        _reader = null;
-        _stream = null;
+        _ggpk?.Dispose();
+        _bundledGgpk?.Dispose();
+        _ggpk = null;
+        _bundledGgpk = null;
     }
 }
 
@@ -272,5 +254,9 @@ public class GGPKRecord
     public long DataOffset { get; set; }
     public int DataLength { get; set; }
 
-    public override string ToString() => $"[{Tag}] {Name} @ {Offset}";
+    // LibGGPK3 references
+    public FileRecord? LegacyRecord { get; set; }
+    public LibBundle3.Index.TreeNode? BundledNode { get; set; }
+
+    public override string ToString() => $"[{Tag}] {Name}";
 }

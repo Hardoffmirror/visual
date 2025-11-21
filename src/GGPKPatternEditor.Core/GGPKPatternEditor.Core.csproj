@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <PackageReference Include="LibGGPK3.LibBundledGGPK3" Version="2.6.11" />
   </ItemGroup>
 
 </Project>
