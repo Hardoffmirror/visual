@@ -503,8 +503,10 @@ public partial class MainViewModel : ObservableObject
             string result;
             int maxSize = 100 * 1024; // 100KB limit for display
 
-            // Check if file is binary (using detected type first)
-            bool isBinary = detectedType != "text" && IsBinaryFile(content, SelectedFile.Name);
+            // Only show as binary for known binary formats that we can't display specially
+            // Everything else defaults to text view
+            string[] binaryOnlyFormats = { "ogg", "wav", "mp3", "zip", "bank", "bk2", "fsb" };
+            bool isBinary = binaryOnlyFormats.Contains(detectedType);
 
             if (isBinary)
             {
