@@ -1,6 +1,6 @@
-using LibGGPK3;
 using LibGGPK3.Records;
-using LibBundledGGPK3;
+using LibBundledGGPK;
+using LibBundle3.Nodes;
 
 namespace GGPKPatternEditor.Core.GGPK;
 
@@ -9,7 +9,7 @@ namespace GGPKPatternEditor.Core.GGPK;
 /// </summary>
 public class GGPKFile : IDisposable
 {
-    private GGPK? _ggpk;
+    private LibGGPK3.GGPK? _ggpk;
     private BundledGGPK? _bundledGgpk;
     private bool _isBundled;
 
@@ -37,11 +37,8 @@ public class GGPKFile : IDisposable
                     _bundledGgpk = new BundledGGPK(filePath, true);
                     _isBundled = true;
 
-                    progress?.Report("Parsing file paths...");
-                    _bundledGgpk.Index.ParsePaths();
-
                     progress?.Report("Building file tree...");
-                    var root = _bundledGgpk.Index.BuildTree(true);
+                    var root = _bundledGgpk.Index.Root;
 
                     progress?.Report("Indexing files...");
                     IndexBundledFiles(root, "", progress);
@@ -53,7 +50,7 @@ public class GGPKFile : IDisposable
                     _bundledGgpk = null;
 
                     progress?.Report("Loading as legacy GGPK...");
-                    _ggpk = new GGPK(filePath);
+                    _ggpk = new LibGGPK3.GGPK(filePath);
                     _isBundled = false;
 
                     progress?.Report("Indexing files...");
@@ -74,7 +71,7 @@ public class GGPKFile : IDisposable
     private int _recordCount;
     private DateTime _lastProgressReport = DateTime.MinValue;
 
-    private void IndexBundledFiles(LibBundle3.Index.TreeNode? node, string parentPath, IProgress<string>? progress)
+    private void IndexBundledFiles(ITreeNode? node, string parentPath, IProgress<string>? progress)
     {
         if (node == null) return;
 
@@ -84,15 +81,15 @@ public class GGPKFile : IDisposable
                 ? node.Name
                 : $"{parentPath}/{node.Name}";
 
-        if (node.Children != null)
+        if (node is IDirectoryNode dirNode)
         {
-            // Directory
-            foreach (var child in node.Children)
+            // Directory - iterate children
+            foreach (var child in dirNode)
             {
                 IndexBundledFiles(child, currentPath, progress);
             }
         }
-        else
+        else if (node is IFileNode fileNode)
         {
             // File
             var record = new GGPKRecord
@@ -100,7 +97,7 @@ public class GGPKFile : IDisposable
                 Name = node.Name,
                 FullPath = currentPath,
                 Tag = "FILE",
-                BundledNode = node
+                BundledFileNode = fileNode
             };
             AllRecords.Add(record);
             FileIndex[currentPath.ToLowerInvariant()] = record;
@@ -166,9 +163,11 @@ public class GGPKFile : IDisposable
 
         try
         {
-            if (_isBundled && record.BundledNode != null && _bundledGgpk != null)
+            if (_isBundled && record.BundledFileNode != null && _bundledGgpk != null)
             {
-                return _bundledGgpk.Index.GetFileContent(record.BundledNode);
+                // Read content from bundled file
+                var fileRecord = record.BundledFileNode.Record;
+                return _bundledGgpk.Index.GetFileContent(fileRecord);
             }
             else if (record.LegacyRecord != null)
             {
@@ -192,10 +191,11 @@ public class GGPKFile : IDisposable
 
         try
         {
-            if (_isBundled && record.BundledNode != null && _bundledGgpk != null)
+            if (_isBundled && record.BundledFileNode != null && _bundledGgpk != null)
             {
                 // For bundled files, we need to replace through the index
-                _bundledGgpk.Index.Replace(record.BundledNode, content);
+                var fileRecord = record.BundledFileNode.Record;
+                _bundledGgpk.Index.Replace(new[] { fileRecord }, new[] { content });
                 return true;
             }
             else if (record.LegacyRecord != null)
@@ -256,7 +256,7 @@ public class GGPKRecord
 
     // LibGGPK3 references
     public FileRecord? LegacyRecord { get; set; }
-    public LibBundle3.Index.TreeNode? BundledNode { get; set; }
+    public IFileNode? BundledFileNode { get; set; }
 
     public override string ToString() => $"[{Tag}] {Name}";
 }
