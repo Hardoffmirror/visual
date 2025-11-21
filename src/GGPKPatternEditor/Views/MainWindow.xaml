@@ -174,12 +174,39 @@
                         </Grid.RowDefinitions>
 
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                            <TextBlock Text="File Content" FontWeight="Bold" FontSize="14"/>
+                            <TextBlock Text="File Content" FontWeight="Bold" FontSize="14" VerticalAlignment="Center"/>
                             <Button Content="Export" Command="{Binding ExportFileCommand}"
-                                    Margin="16,0,0,0" Padding="8,2"
-                                    IsEnabled="{Binding SelectedFile, Converter={x:Null}}"/>
+                                    Margin="16,0,8,0" Padding="8,4"/>
+                            <Button Content="Export CSV" Command="{Binding ExportToCsvCommand}"
+                                    Margin="0,0,8,0" Padding="8,4"
+                                    Visibility="{Binding IsDatFile, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                            <Button Content="Edit" Command="{Binding StartEditingCommand}"
+                                    Margin="0,0,8,0" Padding="8,4"
+                                    Visibility="{Binding IsEditing, Converter={StaticResource BoolToVisibilityConverter}, ConverterParameter=Inverse}"/>
+                            <Button Content="Save" Command="{Binding SaveFileChangesCommand}"
+                                    Margin="0,0,4,0" Padding="8,4" Background="#4CAF50" Foreground="White"
+                                    Visibility="{Binding IsEditing, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                            <Button Content="Cancel" Command="{Binding CancelEditingCommand}"
+                                    Padding="8,4"
+                                    Visibility="{Binding IsEditing, Converter={StaticResource BoolToVisibilityConverter}}"/>
                         </StackPanel>
 
+                        <!-- DAT Table View -->
+                        <DataGrid Grid.Row="1"
+                                  ItemsSource="{Binding DatTableView}"
+                                  AutoGenerateColumns="True"
+                                  IsReadOnly="True"
+                                  CanUserAddRows="False"
+                                  CanUserDeleteRows="False"
+                                  FontFamily="Consolas"
+                                  FontSize="11"
+                                  Visibility="{Binding IsDatFile, Converter={StaticResource BoolToVisibilityConverter}}"
+                                  VirtualizingStackPanel.IsVirtualizing="True"
+                                  VirtualizingStackPanel.VirtualizationMode="Recycling"
+                                  EnableRowVirtualization="True"
+                                  EnableColumnVirtualization="True"/>
+
+                        <!-- Text View (read-only) -->
                         <TextBox Grid.Row="1"
                                  Text="{Binding FileContent, Mode=OneWay}"
                                  IsReadOnly="True"
@@ -188,7 +215,33 @@
                                  VerticalScrollBarVisibility="Auto"
                                  HorizontalScrollBarVisibility="Auto"
                                  AcceptsReturn="True"
-                                 TextWrapping="NoWrap"/>
+                                 TextWrapping="NoWrap">
+                            <TextBox.Style>
+                                <Style TargetType="TextBox">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsDatFile}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBox.Style>
+                        </TextBox>
+
+                        <!-- Editable Text View -->
+                        <TextBox Grid.Row="1"
+                                 Text="{Binding EditableContent, UpdateSourceTrigger=PropertyChanged}"
+                                 FontFamily="Consolas"
+                                 FontSize="12"
+                                 VerticalScrollBarVisibility="Auto"
+                                 HorizontalScrollBarVisibility="Auto"
+                                 AcceptsReturn="True"
+                                 AcceptsTab="True"
+                                 TextWrapping="NoWrap"
+                                 Visibility="{Binding IsEditing, Converter={StaticResource BoolToVisibilityConverter}}"/>
                     </Grid>
                 </Border>
 

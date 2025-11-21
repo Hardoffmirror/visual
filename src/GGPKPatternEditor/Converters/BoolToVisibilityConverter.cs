@@ -10,6 +10,13 @@ public class BoolToVisibilityConverter : IValueConverter
     {
         if (value is bool boolValue)
         {
+            // Check for inverse parameter
+            bool inverse = parameter is string paramStr &&
+                          paramStr.Equals("Inverse", StringComparison.OrdinalIgnoreCase);
+
+            if (inverse)
+                boolValue = !boolValue;
+
             return boolValue ? Visibility.Visible : Visibility.Collapsed;
         }
         return Visibility.Collapsed;
@@ -19,7 +26,13 @@ public class BoolToVisibilityConverter : IValueConverter
     {
         if (value is Visibility visibility)
         {
-            return visibility == Visibility.Visible;
+            bool result = visibility == Visibility.Visible;
+
+            // Check for inverse parameter
+            bool inverse = parameter is string paramStr &&
+                          paramStr.Equals("Inverse", StringComparison.OrdinalIgnoreCase);
+
+            return inverse ? !result : result;
         }
         return false;
     }

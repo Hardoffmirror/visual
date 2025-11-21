@@ -1,10 +1,12 @@
 using System.Collections.ObjectModel;
+using System.Data;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using GGPKPatternEditor.Core.Data;
 using GGPKPatternEditor.Core.GGPK;
 using GGPKPatternEditor.Core.Pattern;
 using GGPKPatternEditor.Core.Settings;
@@ -48,6 +50,21 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     private string _searchFilter = string.Empty;
+
+    [ObservableProperty]
+    private DataView? _datTableView;
+
+    [ObservableProperty]
+    private bool _isDatFile;
+
+    [ObservableProperty]
+    private bool _isEditing;
+
+    [ObservableProperty]
+    private string _editableContent = string.Empty;
+
+    private DatFile? _currentDatFile;
+    private byte[]? _currentFileContent;
 
     public ObservableCollection<GGPKRecord> FilteredFiles { get; } = new();
     public ObservableCollection<TreeNode> FileTree { get; } = new();
@@ -346,6 +363,9 @@ public partial class MainViewModel : ObservableObject
 
         FileContent = "Loading...";
         StatusMessage = $"Loading {SelectedFile.Name}...";
+        IsEditing = false;
+        IsDatFile = false;
+        DatTableView = null;
 
         await Task.Run(() =>
         {
@@ -356,6 +376,28 @@ public partial class MainViewModel : ObservableObject
                 {
                     FileContent = "Unable to read file content";
                     StatusMessage = "Failed to read file";
+                });
+                return;
+            }
+
+            _currentFileContent = content;
+            string ext = Path.GetExtension(SelectedFile.Name).ToLowerInvariant();
+
+            // Check if it's a DAT file - show as table
+            if (ext == ".dat" || ext == ".dat64" || ext == ".datl" || ext == ".datl64")
+            {
+                var datFile = DatFile.Parse(content, SelectedFile.Name);
+                _currentDatFile = datFile;
+
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    IsDatFile = true;
+                    if (datFile.DataTable != null)
+                    {
+                        DatTableView = datFile.DataTable.DefaultView;
+                    }
+                    FileContent = $"DAT File: {datFile.RowCount} rows, {datFile.RowWidth} bytes per row";
+                    StatusMessage = $"Loaded {SelectedFile.Name} - {datFile.RowCount} rows";
                 });
                 return;
             }
@@ -393,9 +435,90 @@ public partial class MainViewModel : ObservableObject
             Application.Current.Dispatcher.Invoke(() =>
             {
                 FileContent = result;
+                EditableContent = result;
                 StatusMessage = $"Loaded {SelectedFile.Name} ({content.Length / 1024}KB)";
             });
         });
+    }
+
+    [RelayCommand]
+    private void StartEditing()
+    {
+        if (SelectedFile == null || IsDatFile) return;
+        IsEditing = true;
+        EditableContent = FileContent;
+        StatusMessage = "Editing mode enabled. Make changes and click Save.";
+    }
+
+    [RelayCommand]
+    private async Task SaveFileChanges()
+    {
+        if (SelectedFile == null || !IsEditing) return;
+
+        try
+        {
+            byte[] newContent = Encoding.UTF8.GetBytes(EditableContent);
+
+            if (newContent.Length != _currentFileContent?.Length)
+            {
+                MessageBox.Show(
+                    $"File size changed from {_currentFileContent?.Length ?? 0} to {newContent.Length} bytes.\n" +
+                    "GGPK files require same-size replacements. Changes not saved.",
+                    "Size Mismatch",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            _ggpkFile.WriteFileContent(SelectedFile, newContent);
+            _currentFileContent = newContent;
+            FileContent = EditableContent;
+            IsEditing = false;
+            StatusMessage = $"Saved changes to {SelectedFile.Name}";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to save: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    [RelayCommand]
+    private void CancelEditing()
+    {
+        IsEditing = false;
+        EditableContent = FileContent;
+        StatusMessage = "Editing cancelled";
+    }
+
+    [RelayCommand]
+    private async Task ExportToCsv()
+    {
+        if (_currentDatFile == null || !IsDatFile)
+        {
+            MessageBox.Show("Please select a DAT file first", "Info", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var dialog = new SaveFileDialog
+        {
+            Filter = "CSV Files (*.csv)|*.csv|All Files (*.*)|*.*",
+            FileName = Path.GetFileNameWithoutExtension(SelectedFile?.Name ?? "data") + ".csv",
+            Title = "Export to CSV"
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            try
+            {
+                string csv = _currentDatFile.ExportToCsv();
+                await File.WriteAllTextAsync(dialog.FileName, csv, Encoding.UTF8);
+                StatusMessage = $"Exported to {Path.GetFileName(dialog.FileName)}";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to export: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
     }
 
     private bool IsBinaryFile(byte[] content, string fileName)
