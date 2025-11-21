@@ -1,0 +1,226 @@
+<Window x:Class="GGPKPatternEditor.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:GGPKPatternEditor.ViewModels"
+        Title="GGPK Pattern Editor"
+        Height="800" Width="1200"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource BackgroundBrush}">
+
+    <Window.DataContext>
+        <vm:MainViewModel/>
+    </Window.DataContext>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="0" Background="{StaticResource SurfaceBrush}"
+                BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Padding="8">
+            <StackPanel Orientation="Horizontal">
+                <Button Content="Open GGPK" Command="{Binding OpenGGPKFileCommand}"
+                        Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
+
+                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="8,0"/>
+
+                <Button Content="Load Config" Command="{Binding LoadConfigurationCommand}"
+                        Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
+                <Button Content="Save Config" Command="{Binding SaveConfigurationCommand}"
+                        Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"
+                        IsEnabled="{Binding HasConfiguration}"/>
+                <Button Content="New Config" Command="{Binding CreateDefaultConfigurationCommand}"
+                        Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"/>
+
+                <Separator Style="{StaticResource {x:Static ToolBar.SeparatorStyleKey}}" Margin="8,0"/>
+
+                <Button Content="Search Patterns" Command="{Binding SearchPatternsCommand}"
+                        Style="{StaticResource PrimaryButton}" Margin="0,0,8,0"
+                        Background="#4CAF50"
+                        IsEnabled="{Binding IsFileLoaded}"/>
+                <Button Content="Apply All" Command="{Binding ApplyAllReplacementsCommand}"
+                        Style="{StaticResource PrimaryButton}"
+                        Background="#FF5722"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Main Content -->
+        <Grid Grid.Row="1" Margin="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left Panel - File Browser & Rules -->
+            <Grid Grid.Column="0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="8"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- File Browser -->
+                <Border Grid.Row="0" Background="{StaticResource SurfaceBrush}"
+                        CornerRadius="4" Padding="8">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Text="Files" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+
+                        <TextBox Grid.Row="1"
+                                 Text="{Binding SearchFilter, UpdateSourceTrigger=PropertyChanged}"
+                                 Margin="0,0,0,8">
+                            <TextBox.Style>
+                                <Style TargetType="TextBox">
+                                    <Style.Triggers>
+                                        <Trigger Property="Text" Value="">
+                                            <Setter Property="Background">
+                                                <Setter.Value>
+                                                    <VisualBrush Stretch="None" AlignmentX="Left">
+                                                        <VisualBrush.Visual>
+                                                            <TextBlock Text="Filter files..." Foreground="Gray" Margin="5,2"/>
+                                                        </VisualBrush.Visual>
+                                                    </VisualBrush>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBox.Style>
+                        </TextBox>
+
+                        <ListBox Grid.Row="2"
+                                 ItemsSource="{Binding FilteredFiles}"
+                                 SelectedItem="{Binding SelectedFile}"
+                                 DisplayMemberPath="FullPath"
+                                 SelectionChanged="FileListBox_SelectionChanged"/>
+                    </Grid>
+                </Border>
+
+                <!-- Pattern Rules -->
+                <Border Grid.Row="2" Background="{StaticResource SurfaceBrush}"
+                        CornerRadius="4" Padding="8">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Text="Pattern Rules" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+
+                        <ListBox Grid.Row="1"
+                                 ItemsSource="{Binding CurrentConfiguration.Rules}"
+                                 SelectedItem="{Binding SelectedRule}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal">
+                                        <CheckBox IsChecked="{Binding Enabled}" Margin="0,0,8,0"/>
+                                        <TextBlock Text="{Binding Name}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <!-- GridSplitter -->
+            <GridSplitter Grid.Column="1" Width="8" HorizontalAlignment="Stretch"
+                          Background="Transparent"/>
+
+            <!-- Right Panel - Content & Results -->
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="8"/>
+                    <RowDefinition Height="200"/>
+                </Grid.RowDefinitions>
+
+                <!-- File Content Viewer -->
+                <Border Grid.Row="0" Background="{StaticResource SurfaceBrush}"
+                        CornerRadius="4" Padding="8">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="File Content" FontWeight="Bold" FontSize="14"/>
+                            <Button Content="Export" Command="{Binding ExportFileCommand}"
+                                    Margin="16,0,0,0" Padding="8,2"
+                                    IsEnabled="{Binding SelectedFile, Converter={x:Null}}"/>
+                        </StackPanel>
+
+                        <TextBox Grid.Row="1"
+                                 Text="{Binding FileContent, Mode=OneWay}"
+                                 IsReadOnly="True"
+                                 FontFamily="Consolas"
+                                 FontSize="12"
+                                 VerticalScrollBarVisibility="Auto"
+                                 HorizontalScrollBarVisibility="Auto"
+                                 AcceptsReturn="True"
+                                 TextWrapping="NoWrap"/>
+                    </Grid>
+                </Border>
+
+                <!-- GridSplitter -->
+                <GridSplitter Grid.Row="1" Height="8" HorizontalAlignment="Stretch"
+                              Background="Transparent"/>
+
+                <!-- Search Results -->
+                <Border Grid.Row="2" Background="{StaticResource SurfaceBrush}"
+                        CornerRadius="4" Padding="8">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Text="Search Results" FontWeight="Bold" FontSize="14" Margin="0,0,0,8"/>
+
+                        <DataGrid Grid.Row="1"
+                                  ItemsSource="{Binding SearchResults}"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  CanUserAddRows="False"
+                                  GridLinesVisibility="Horizontal"
+                                  HeadersVisibility="Column">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="File" Binding="{Binding FilePath}" Width="*"/>
+                                <DataGridTextColumn Header="Rule" Binding="{Binding RuleName}" Width="150"/>
+                                <DataGridTextColumn Header="Offset" Binding="{Binding Offset}" Width="80"/>
+                                <DataGridTextColumn Header="Match" Binding="{Binding MatchedText}" Width="200"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <!-- Status Bar -->
+        <Border Grid.Row="2" Background="{StaticResource SurfaceBrush}"
+                BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" Padding="8,4">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="200"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center"/>
+
+                <ProgressBar Grid.Column="1" Value="{Binding ProgressValue}"
+                             Maximum="100" Height="16" Margin="8,0,0,0"
+                             Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibilityConverter}}"/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

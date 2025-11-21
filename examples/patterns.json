@@ -1,0 +1,71 @@
+{
+  "name": "Example Pattern Configuration",
+  "description": "Example patterns for GGPK editing - customize for your needs",
+  "version": "1.0",
+  "rules": [
+    {
+      "name": "Example Text Replace",
+      "description": "Replace text in configuration files",
+      "search": {
+        "searchText": "OldValue",
+        "hexPattern": "",
+        "isRegex": false,
+        "caseSensitive": true
+      },
+      "replace": "NewValue",
+      "filePatterns": [
+        "*.txt",
+        "*.json",
+        "*.cfg"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "Binary Pattern Example",
+      "description": "Search for hex bytes - use ?? for wildcards",
+      "search": {
+        "searchText": "",
+        "hexPattern": "48 65 6C 6C 6F",
+        "isRegex": false,
+        "caseSensitive": true
+      },
+      "replace": "57 6F 72 6C 64",
+      "filePatterns": [
+        "*.dat",
+        "*.bin"
+      ],
+      "enabled": false
+    },
+    {
+      "name": "Regex Pattern Example",
+      "description": "Use regular expressions for complex patterns",
+      "search": {
+        "searchText": "value\\s*=\\s*\\d+",
+        "hexPattern": "",
+        "isRegex": true,
+        "caseSensitive": false
+      },
+      "replace": "value = 100",
+      "filePatterns": [
+        "*.ini",
+        "*.cfg"
+      ],
+      "enabled": false
+    },
+    {
+      "name": "Wildcard Binary Search",
+      "description": "Use ?? for wildcard bytes in binary patterns",
+      "search": {
+        "searchText": "",
+        "hexPattern": "FF ?? ?? 00 01",
+        "isRegex": false,
+        "caseSensitive": true
+      },
+      "replace": "FF 00 00 00 01",
+      "filePatterns": [
+        "Data/**/*.dat"
+      ],
+      "enabled": false
+    }
+  ]
+}
