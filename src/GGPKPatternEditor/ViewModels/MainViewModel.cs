@@ -705,7 +705,7 @@ public partial class MainViewModel : ObservableObject
 
     private string DetectFileType(byte[] content, string extension)
     {
-        // Check magic bytes (file signatures) first
+        // Check magic bytes (file signatures) first for binary formats
         if (content.Length >= 8)
         {
             // PNG: 89 50 4E 47 0D 0A 1A 0A
@@ -759,11 +759,35 @@ public partial class MainViewModel : ObservableObject
         if (extension == ".tga")
             return "tga";
 
-        // DAT files - check if it starts with a reasonable row count and has magic marker
+        // DAT files
         if (extension == ".dat" || extension == ".dat64" || extension == ".datl" || extension == ".datl64")
             return "dat";
 
-        // Check if content looks like text
+        // Known text file extensions (from VisualGGPK2) - trust the extension
+        string[] unicodeTextExtensions = {
+            ".act", ".ais", ".amd", ".ao", ".aoc", ".arm", ".ast", ".atlas", ".cht", ".clt",
+            ".dct", ".dgr", ".dlp", ".ecf", ".edp", ".env", ".epk", ".et", ".ffx", ".gft",
+            ".gt", ".idl", ".it", ".json", ".mat", ".mtd", ".mtp", ".ot", ".otc", ".pet",
+            ".red", ".rs", ".sm", ".tgr", ".tgt", ".tmd", ".trl", ".tsi", ".txt", ".ui", ".xml"
+        };
+
+        string[] asciiTextExtensions = {
+            ".csv", ".filter", ".fx", ".hlsl", ".mel", ".properties", ".slt"
+        };
+
+        // Additional common text extensions
+        string[] commonTextExtensions = {
+            ".html", ".htm", ".css", ".js", ".ts", ".lua", ".py", ".cs", ".cpp", ".c", ".h",
+            ".hpp", ".java", ".rb", ".php", ".ini", ".cfg", ".config", ".yaml", ".yml",
+            ".toml", ".md", ".log", ".sql", ".sh", ".bat", ".ps1", ".glsl", ".vert", ".frag"
+        };
+
+        if (unicodeTextExtensions.Contains(extension) ||
+            asciiTextExtensions.Contains(extension) ||
+            commonTextExtensions.Contains(extension))
+            return "text";
+
+        // For unknown extensions, check if content looks like text
         if (content.Length > 0 && !IsBinaryFile(content, "unknown" + extension))
             return "text";
 
