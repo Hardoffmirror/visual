@@ -407,7 +407,7 @@ public class DatFile
             offset += 4;
         }
 
-        if (rowIndex == -1 || rowIndex == 0xFEFEFEFE || rowIndex == 0xFEFEFEFEFEFEFEFE)
+        if (rowIndex == -1 || rowIndex == unchecked((long)0xFEFEFEFE) || rowIndex == unchecked((long)0xFEFEFEFEFEFEFEFE))
             return "null";
 
         return $"Row {rowIndex}";
@@ -430,7 +430,7 @@ public class DatFile
             offset += 4; // Skip second part
         }
 
-        if (rowIndex == -1 || rowIndex == 0xFEFEFEFE || rowIndex == 0xFEFEFEFEFEFEFEFE)
+        if (rowIndex == -1 || rowIndex == unchecked((long)0xFEFEFEFE) || rowIndex == unchecked((long)0xFEFEFEFEFEFEFEFE))
             return "null";
 
         return $"Row {rowIndex}";
